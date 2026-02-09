@@ -218,19 +218,47 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
- 
-        const firebaseConfig = {
-    apiKey: "AIzaSyBbx2eSpISzDA1puvnynE3pzGT1E6jXkm8",
-    authDomain: "or-loaner-tracker.firebaseapp.com",
-    projectId: "or-loaner-tracker",
-    storageBucket: "or-loaner-tracker.firebasestorage.app",
-    messagingSenderId: "152462680465",
-    appId: "1:152462680465:web:57ea8cefc1f94ed4f5ba30"
-  };
-        
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbx2eSpISzDA1puvnynE3pzGT1E6jXkm8",
+  authDomain: "or-loaner-tracker.firebaseapp.com",
+  projectId: "or-loaner-tracker",
+  storageBucket: "or-loaner-tracker.firebasestorage.app",
+  messagingSenderId: "152462680465",
+  appId: "1:152462680465:web:57ea8cefc1f94ed4f5ba30"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const userInfo = document.getElementById("user-info");
+userInfo.innerText = "Connecting to Firebase...";
+
+// 🔹 AUTH FLOW
+try {
+  await signInAnonymously(auth);
+} catch (err) {
+  console.error("Auth error:", err);
+  userInfo.innerText = "Auth failed (check console)";
+}
+
+// 🔹 LISTENER
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    userInfo.innerText = `Logged in: ${user.uid.substring(0, 8)}...`;
+    console.log("Firebase connected:", user.uid);
+  } else {
+    userInfo.innerText = "Not authenticated";
+  }
+});       
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -480,3 +508,4 @@
 </body>
 
 </html>
+
