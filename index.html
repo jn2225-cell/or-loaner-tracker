@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OR Loaner Implant Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+    <!-- Use html2canvas and jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .custom-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Export Template Styling */
+        #export-template {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 800px;
+            background: white;
+            padding: 40px;
+            color: black;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+    <!-- Header -->
+    <header class="bg-blue-700 text-white p-4 shadow-lg sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                OR Loaner Tracker
+            </h1>
+            <div id="user-info" class="text-xs opacity-80">Connecting...</div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-4 mb-20">
+        
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg">
+            <button onclick="switchTab('entry')" id="tab-entry" class="flex-1 py-3 font-medium text-center tab-active">New Entry</button>
+            <button onclick="switchTab('list')" id="tab-list" class="flex-1 py-3 font-medium text-center text-gray-500">Active Trays</button>
+            <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 font-medium text-center text-gray-500">History</button>
+        </div>
+
+        <!-- Section: New Entry Form -->
+        <section id="section-entry" class="space-y-4">
+            <div class="bg-white p-6 rounded-xl custom-shadow">
+                <form id="loaner-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
+                        <div class="col-span-full font-bold text-blue-700 text-sm">PATIENT DETAILS</div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Patient Name</label>
+                            <input type="text" id="patientName" required placeholder="Full Name" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Hospital Number (ID)</label>
+                            <input type="text" id="hospitalNumber" required placeholder="CR / UHID No." class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="col-span-full font-bold text-blue-700 text-sm">LOANER DETAILS</div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Company Name</label>
+                            <input type="text" id="companyName" required placeholder="e.g. Stryker, Zimmer" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Company Contact</label>
+                            <input type="tel" id="companyContact" placeholder="Phone Number" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Receiving Staff Name</label>
+                            <input type="text" id="receivingPerson" required placeholder="Who received it?" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Staff Contact</label>
+                            <input type="tel" id="receivingContact" placeholder="Ext or Phone" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Department</label>
+                            <select id="department" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="Ortho 1">Ortho 1</option>
+                                <option value="Ortho 2">Ortho 2</option>
+                                <option value="Ortho 3">Ortho 3</option>
+                                <option value="General">General</option>
+                                <option value="Neuro">Neuro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Type of Implant/Tray</label>
+                            <input type="text" id="implantType" required placeholder="e.g. TKR Set, DHHS Plate" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Upload Delivery Challan Photo</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-400 transition-colors cursor-pointer relative" id="drop-zone">
+                            <div class="space-y-1 text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <div class="flex text-sm text-gray-600">
+                                    <span class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">Take Photo / Upload</span>
+                                </div>
+                                <p class="text-xs text-gray-500">PNG, JPG up to 5MB</p>
+                            </div>
+                            <input id="file-upload" type="file" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        </div>
+                        <div id="image-preview-container" class="hidden mt-4">
+                            <p class="text-xs font-semibold text-gray-500 mb-2">Preview:</p>
+                            <img id="image-preview" src="#" alt="Preview" class="max-h-48 rounded-lg border">
+                        </div>
+                    </div>
+
+                    <button type="submit" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg transition-colors flex justify-center items-center gap-2">
+                        <span>Save Entry</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Section: Active Trays -->
+        <section id="section-list" class="hidden space-y-4">
+            <div id="active-list" class="grid grid-cols-1 gap-4">
+                <div class="text-center py-10 text-gray-500">Loading active trays...</div>
+            </div>
+        </section>
+
+        <!-- Section: History -->
+        <section id="section-history" class="hidden space-y-4">
+            <div id="history-list" class="grid grid-cols-1 gap-4">
+                <div class="text-center py-10 text-gray-500">Loading history...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Success/Error Message Box -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-6 py-3 rounded-full text-white font-medium hidden shadow-2xl transition-all"></div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="fixed inset-0 bg-black/90 z-[70] hidden flex items-center justify-center p-4">
+        <button onclick="closeImageModal()" class="absolute top-4 right-4 text-white p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <img id="modal-img" src="" class="max-w-full max-h-[90vh] rounded shadow-xl">
+    </div>
+
+    <!-- Hidden Export Template -->
+    <div id="export-template">
+        <div style="border: 2px solid #333; padding: 20px;">
+            <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
+                <h1 style="font-size: 24px; margin: 0;">LOANER TRAY TRANSFER ADVICE</h1>
+                <p style="margin: 5px 0;">Operating Room Department</p>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; width: 30%; font-weight: bold;">Patient Name</td>
+                    <td id="pdf-patient" style="padding: 8px; border: 1px solid #ddd;"></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; width: 30%; font-weight: bold;">Hospital No.</td>
+                    <td id="pdf-hosp" style="padding: 8px; border: 1px solid #ddd;"></td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Tray/Implant</td>
+                    <td id="pdf-tray" colspan="3" style="padding: 8px; border: 1px solid #ddd;"></td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Company</td>
+                    <td id="pdf-company" style="padding: 8px; border: 1px solid #ddd;"></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Transfer Date</td>
+                    <td id="pdf-date" style="padding: 8px; border: 1px solid #ddd;"></td>
+                </tr>
+            </table>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 16px; margin-bottom: 10px;">DELIVERY CHALLAN ATTACHMENT</h3>
+                <div style="text-align: center; border: 1px solid #ddd; padding: 10px;">
+                    <img id="pdf-image" src="" style="max-width: 100%; max-height: 500px;">
+                </div>
+            </div>
+
+            <div style="margin-top: 40px; display: flex; justify-content: space-between;">
+                <div style="text-align: center; width: 45%;">
+                    <div style="border-top: 1px solid #000; padding-top: 5px;">Relieving Staff Signature</div>
+                </div>
+                <div style="text-align: center; width: 45%;">
+                    <div style="border-top: 1px solid #000; padding-top: 5px;">Receiving Staff Signature (PMRC)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'or-loaner-tracker';
+        
+        let currentUser = null;
+        let selectedImageData = null;
+        let allItems = [];
+
+        // Auth Init
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                document.getElementById('user-info').innerText = `Logged in: ${user.uid.substring(0,8)}...`;
+                setupDataListeners();
+            }
+        });
+
+        // Form Handling
+        const fileInput = document.getElementById('file-upload');
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    selectedImageData = event.target.result;
+                    document.getElementById('image-preview').src = selectedImageData;
+                    document.getElementById('image-preview-container').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('loaner-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = 'Saving...';
+
+            const payload = {
+                patientName: document.getElementById('patientName').value,
+                hospitalNumber: document.getElementById('hospitalNumber').value,
+                companyName: document.getElementById('companyName').value,
+                companyContact: document.getElementById('companyContact').value,
+                receivingPerson: document.getElementById('receivingPerson').value,
+                receivingContact: document.getElementById('receivingContact').value,
+                department: document.getElementById('department').value,
+                implantType: document.getElementById('implantType').value,
+                imageUrl: selectedImageData,
+                status: 'In OR',
+                createdAt: serverTimestamp(),
+                createdBy: currentUser.uid,
+                returnedAt: null,
+                lastTransferDate: null
+            };
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'loaners'), payload);
+                showToast("Saved!", "bg-green-600");
+                e.target.reset();
+                selectedImageData = null;
+                document.getElementById('image-preview-container').classList.add('hidden');
+                switchTab('list');
+            } catch (err) {
+                showToast("Error saving", "bg-red-500");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Save Entry';
+            }
+        });
+
+        // Realtime Listeners
+        function setupDataListeners() {
+            const q = collection(db, 'artifacts', appId, 'public', 'data', 'loaners');
+            onSnapshot(q, (snapshot) => {
+                allItems = [];
+                snapshot.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+                allItems.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                render();
+            });
+        }
+
+        function render() {
+            const active = allItems.filter(i => i.status === 'In OR' || i.status === 'Transferred to PMRC');
+            const history = allItems.filter(i => i.status === 'Returned');
+            
+            renderList(active, 'active-list', true);
+            renderList(history, 'history-list', false);
+        }
+
+        function renderList(data, containerId, isActive) {
+            const container = document.getElementById(containerId);
+            if (data.length === 0) {
+                container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-gray-400">No items found.</div>`;
+                return;
+            }
+
+            container.innerHTML = data.map(item => `
+                <div class="bg-white p-4 rounded-xl custom-shadow border-l-4 ${item.status === 'Transferred to PMRC' ? 'border-orange-500' : (isActive ? 'border-blue-500' : 'border-gray-400')}">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${item.status === 'Transferred to PMRC' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}">
+                                ${item.status === 'Transferred to PMRC' ? 'AT PMRC' : item.department}
+                            </span>
+                            <h3 class="text-lg font-bold text-gray-800">${item.implantType}</h3>
+                            <p class="text-sm text-gray-500 font-medium">Patient: ${item.patientName} (${item.hospitalNumber})</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-y-3 text-sm text-gray-600 my-4 border-t pt-3">
+                        <div>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase">Company</p>
+                            <p class="font-medium">${item.companyName}</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase">Received By</p>
+                            <p class="font-medium">${item.receivingPerson}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        ${item.imageUrl ? `
+                            <button onclick="window.viewImage('${item.imageUrl}')" class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded transition-all">
+                                View Challan
+                            </button>
+                        ` : (isActive ? '' : '<span class="text-[10px] text-gray-400 italic">Image deleted to save space</span>')}
+                        
+                        ${item.status === 'In OR' ? `
+                            <button onclick="window.exportAndTransfer('${item.id}')" class="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded transition-all flex items-center justify-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" stroke-width="2"/></svg>
+                                Transfer to PMRC
+                            </button>
+                            <button onclick="window.markStatus('${item.id}', 'Returned')" class="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded transition-all">
+                                Return
+                            </button>
+                        ` : (item.status === 'Transferred to PMRC' ? `
+                            <button onclick="window.markStatus('${item.id}', 'In OR')" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded transition-all">
+                                Received Back
+                            </button>
+                        ` : `
+                            <div class="w-full py-2 text-center text-gray-400 text-xs italic">
+                                Returned on ${item.returnedAt ? new Date(item.returnedAt.seconds * 1000).toLocaleDateString() : '-'}
+                            </div>
+                        `)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Action Functions
+        window.markStatus = async (id, status) => {
+            const updates = { status: status };
+            
+            if (status === 'Returned') {
+                updates.returnedAt = serverTimestamp();
+                // Rule: Clear image when returned to company to save storage
+                updates.imageUrl = null; 
+            }
+            
+            if (status === 'In OR') {
+                updates.lastTransferDate = null;
+            }
+            
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'loaners', id), updates);
+                showToast(`Updated to ${status}${status === 'Returned' ? ' (Image Deleted)' : ''}`, "bg-blue-600");
+            } catch (err) {
+                showToast("Update failed", "bg-red-500");
+            }
+        };
+
+        window.exportAndTransfer = async (id) => {
+            const item = allItems.find(i => i.id === id);
+            if (!item) return;
+
+            showToast("Generating Transfer Advice PDF...", "bg-blue-500");
+
+            // Fill Export Template
+            document.getElementById('pdf-patient').innerText = item.patientName;
+            document.getElementById('pdf-hosp').innerText = item.hospitalNumber;
+            document.getElementById('pdf-tray').innerText = item.implantType;
+            document.getElementById('pdf-company').innerText = item.companyName;
+            document.getElementById('pdf-date').innerText = new Date().toLocaleString();
+            document.getElementById('pdf-image').src = item.imageUrl || '';
+
+            const element = document.getElementById('export-template');
+            
+            try {
+                const canvas = await html2canvas(element, { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`Transfer_${item.hospitalNumber}.pdf`);
+
+                // Update Status
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'loaners', id), {
+                    status: 'Transferred to PMRC',
+                    lastTransferDate: serverTimestamp()
+                });
+                
+                showToast("Transfer Document Saved!", "bg-green-600");
+            } catch (err) {
+                console.error(err);
+                showToast("PDF Export failed", "bg-red-500");
+            }
+        };
+
+        // Utility
+        window.viewImage = (url) => {
+            if (!url) return;
+            document.getElementById('modal-img').src = url;
+            document.getElementById('image-modal').classList.remove('hidden');
+        };
+        window.closeImageModal = () => document.getElementById('image-modal').classList.add('hidden');
+        window.switchTab = (tab) => {
+            ['entry', 'list', 'history'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.toggle('hidden', t !== tab);
+                document.getElementById(`tab-${t}`).classList.toggle('tab-active', t === tab);
+                document.getElementById(`tab-${t}`).classList.toggle('text-gray-500', t !== tab);
+            });
+        };
+        function showToast(msg, bgColor) {
+            toast.innerText = msg;
+            toast.className = `fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] px-6 py-3 rounded-full text-white font-medium shadow-2xl transition-all ${bgColor}`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+
+        window.onload = initAuth;
+    </script>
+</body>
+</html>
